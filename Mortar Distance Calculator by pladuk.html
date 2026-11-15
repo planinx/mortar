@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mortar Distance Calculator</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#16181d;--mut:#667085;--bd:#d9dde3;--ac:#e8590c;--ok:#0a8f5b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101216;--card:#1a1d23;--tx:#eceef2;--mut:#98a2b3;--bd:#2d323b;--ac:#ff8a3d;--ok:#3ddc97}}
+:root[data-theme="dark"]{--bg:#101216;--card:#1a1d23;--tx:#eceef2;--mut:#98a2b3;--bd:#2d323b;--ac:#ff8a3d;--ok:#3ddc97}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans Thai",Tahoma,sans-serif;line-height:1.5}
+main{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 12px;text-align:center;}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+#drop{border:2px dashed var(--bd);border-radius:12px;padding:24px 16px;text-align:center;color:var(--mut);cursor:pointer;margin-bottom:10px}
+#drop b{color:var(--tx)}
+.action-buttons{display:flex;gap:10px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;}
+.action-buttons button{padding:12px 18px;font-size:15px;font-weight:600;border-radius:10px;background:var(--ac);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:8px;}
+.action-buttons button.secondary{background:var(--card);color:var(--tx);border:1px solid var(--bd);}
+.wrap{overflow:auto;border-radius:8px;border:1px solid var(--bd);background:#000;text-align:center;max-height:75vh;}
+canvas{max-width:100%;height:auto;cursor:crosshair;touch-action:none;display:block;margin:0 auto}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;}
+label{font-size:14px;color:var(--mut)}
+input[type=number]{width:80px;padding:7px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:15px;text-align:center;}
+button{padding:8px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:14px;cursor:pointer}
+button:hover{border-color:var(--ac)}
+#res{font-size:clamp(36px,8vw,64px);font-weight:800;color:var(--ok);line-height:1.1;text-align:center;}
+.sub{color:var(--mut);font-size:14px;text-align:center;}
+</style>
+</head>
+<body>
+<main>
+<h1>🎯 เครื่องคำนวณระยะ Mortar (PUBG)</h1>
+<div id="drop" tabindex="0">
+  <b>กด Ctrl+V เพื่อวางภาพแคปแมป</b><br>หรือลากไฟล์มาวาง / คลิกเพื่อเลือกไฟล์
+  <input id="file" type="file" accept="image/*" hidden>
+  <input id="camFile" type="file" accept="image/*" capture="environment" hidden>
+</div>
+<div class="action-buttons">
+  <button id="btnCamera" type="button">📷 ถ่ายรูปแผนที่ (กล้อง)</button>
+  <button id="btnGallery" class="secondary" type="button">📁 เลือกจากอัลบั้ม</button>
+</div>
+
+<div id="app" hidden>
+  <div class="card">
+    <div id="res">– m</div>
+    <div class="sub" id="det"></div>
+  </div>
+  <div class="wrap"><canvas id="cv"></canvas></div>
+  <div class="card" style="margin-top:12px">
+    <div class="row">
+      <label>กริด 1 ช่อง = <input id="gpx" type="number" step="0.5" min="10"> พิกเซล</label>
+      <button id="gm1">−1</button><button id="gp1">+1</button>
+      <label>= <input id="gm" type="number" value="100" min="1"> เมตร</label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="redo">ตรวจจับใหม่อัตโนมัติ</button>
+      <button id="pick">เลือกสีมาร์กจากภาพ</button>
+      <button id="clr">ล้างจุด</button>
+      <label><input type="checkbox" id="vib"> โหมดสีจัด (RTX Vibrance)</label>
+      <label><input type="checkbox" id="showg" checked> แสดงเส้นกริด (สีฟ้า)</label>
+    </div>
+    <p class="sub" style="margin:10px 0 0">คลิกบนภาพเพื่อวางจุด A และ B ได้เอง หรือคลิก/ลากเพื่อย้ายจุดที่ใกล้ที่สุด แถบสีขาวมุมซ้ายล่างคือความยาว 1 ช่องกริดที่โปรแกรมอ่านได้ ถ้าไม่ตรงกับช่องในภาพให้ปรับตัวเลขพิกเซลของกริด</p>
+  </div>
+</div>
+<div id="pv" hidden style="position:fixed;z-index:50;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px;box-shadow:0 6px 24px rgba(0,0,0,.35);width:122px"><canvas id="lp" width="104" height="104" style="width:104px;height:104px;display:block;border-radius:6px"></canvas><div style="display:flex;gap:6px;align-items:center;margin-top:6px"><span id="sw" style="width:22px;height:22px;border-radius:5px;border:1px solid var(--bd)"></span><span id="hx" style="font:12px monospace"></span></div></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d',{willReadFrequently:true});
+let gridInfo=null,img=null,A=null,B=null,grid=0,target=null,picking=false,drag=null;
+
+function loadBlob(b){
+  const url=URL.createObjectURL(b),im=new Image();
+  im.onload=()=>{img=im;cv.width=im.naturalWidth;cv.height=im.naturalHeight;oc.width=cv.width;oc.height=cv.height;octx.drawImage(im,0,0);
+    $('app').hidden=false;$('drop').style.display='none';document.querySelector('.action-buttons').style.display='none';A=B=null;auto();URL.revokeObjectURL(url)};
+  im.src=url;
+}
+document.addEventListener('paste',e=>{
+  for(const it of e.clipboardData.items){if(it.type.startsWith('image/')){loadBlob(it.getAsFile());e.preventDefault();return}}
+});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))loadBlob(f)});
+$('drop').onclick=()=>$('file').click();
+$('file').onchange=e=>{if(e.target.files[0])loadBlob(e.target.files[0])};
+$('camFile').onchange=e=>{if(e.target.files[0])loadBlob(e.target.files[0])};
+$('btnGallery').onclick=()=>$('file').click();
+$('btnCamera').onclick=()=>$('camFile').click();
+
+function raw(){ctx.drawImage(img,0,0);return ctx.getImageData(0,0,cv.width,cv.height)}
+
+function isMark(d,i){
+  if(target){const dr=d[i]-target[0],dg=d[i+1]-target[1],db=d[i+2]-target[2];return dr*dr+dg*dg+db*db<45*45}
+  return d[i]>225&&d[i+1]>225&&d[i+2]<110;
+}
+function detectPoints(id){
+  const W=id.width,H=id.height,d=id.data,pts=[];
+  const m=(x,y)=>isMark(d,(y*W+x)*4);
+  for(let y=6;y<H-6;y++)for(let x=6;x<W-6;x++){
+    if(!m(x,y))continue;
+    if(m(x-4,y)&&m(x+4,y)&&m(x,y-4)&&m(x,y+4))continue;
+    pts.push([x,y]);
+  }
+  if(pts.length<10)return null;
+  const far=(p)=>{let b=pts[0],bd=-1;for(const q of pts){const v=(q[0]-p[0])**2+(q[1]-p[1])**2;if(v>bd){bd=v;b=q}}return b};
+  let cx=0,cy=0;for(const p of pts){cx+=p[0];cy+=p[1]}
+  let p1=far([cx/pts.length,cy/pts.length]),p2=far(p1);p1=far(p2);
+  return [p1,p2];
+}
+function detectGrid(id){
+  const W=id.width,H=id.height,d=id.data;
+  const px=new Float64Array(W),py=new Float64Array(H);
+  for(let y=0;y<H;y+=2)for(let x=0;x<W;x+=2){
+    const i=(y*W+x)*4,g=d[i]*.3+d[i+1]*.59+d[i+2]*.11;px[x]+=g;py[y]+=g;
+  }
+  const hp=(p,n)=>{const h=new Float64Array(n);for(let i=0;i<n;i++){let s=0,c=0;
+    for(let k=-5;k<=5;k++){if(k&&i+k>=0&&i+k<n){s+=p[i+k];c++}}
+    h[i]=(p[i]-s/c)};
+    return h};
+  const hx=hp(px,W),hy=hp(py,H);
+  const ac=(h,n,l)=>{let s=0,e=0;for(let i=0;i+l<n;i++){s+=h[i]*h[i+l]}for(let i=0;i<n;i++)e+=h[i]*h[i];return s/(e||1)};
+  const min=40,max=Math.floor(Math.min(W,H)*.9),r=[];
+  for(let l=0;l<=max;l++)r.push(l<min?-1:(ac(hx,W,l)+ac(hy,H,l))/2);
+  let best=-1;for(let l=min;l<=max;l++)if(r[l]>best)best=r[l];
+  if(best<=0)return 0;
+  for(let l=min+1;l<max;l++){
+    if(r[l]>=best*.75&&r[l]>=r[l-1]&&r[l]>=r[l+1]){
+      const a=r[l-1],b=r[l],c=r[l+1],den=a-2*b+c;
+      return l+(den?0.5*(a-c)/den:0);
+    }
+  }
+  return 0;
+}
+function detectPoints2(id){
+  const W=id.width,H=id.height,d=id.data,N=W*H;
+  const M=new Uint8Array(N);
+  for(let i=0;i<N;i++)M[i]=isMark(d,i*4)?1:0;
+  const box=(src,r)=>{
+    const S=new Int32Array((W+1)*(H+1));
+    for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=src[y*W+x];S[(y+1)*(W+1)+x+1]=S[y*(W+1)+x+1]+row}}
+    const out=new Int32Array(N);
+    for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);
+      for(let x=0;x<W;x++){const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1);
+        out[y*W+x]=S[y1*(W+1)+x1]-S[y0*(W+1)+x1]-S[y1*(W+1)+x0]+S[y0*(W+1)+x0]}}
+    return out};
+  const b1=box(M,4),T=new Uint8Array(N);
+  for(let i=0;i<N;i++)T[i]=b1[i]>=81?1:0;
+  const b2=box(T,6),pts=[];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(M[i]&&!b2[i])pts.push([x,y])}
+  if(pts.length<10)return null;
+  const far=(p)=>{let b=pts[0],bd=-1;for(const q of pts){const v=(q[0]-p[0])**2+(q[1]-p[1])**2;if(v>bd){bd=v;b=q}}return b};
+  let cx=0,cy=0;for(const p of pts){cx+=p[0];cy+=p[1]}
+  let p1=far([cx/pts.length,cy/pts.length]),p2=far(p1);p1=far(p2);
+  return [p1,p2];
+}
+function detectGrid2(id){
+  const W=id.width,H=id.height,d=id.data;
+  const g=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;
+  const px=new Float64Array(W),py=new Float64Array(H);
+  const cap=v=>Math.max(-15,Math.min(15,v));
+  for(let y=3;y<H-3;y++)for(let x=3;x<W-3;x++){
+    const i=y*W+x;
+    px[x]+=cap(g[i]-(g[i-3]+g[i+3])/2);
+    py[y]+=cap(g[i]-(g[i-3*W]+g[i+3*W])/2);
+  }
+  const z=(p,n)=>{const a=Array.from(p,v=>Math.abs(v)/n),s=[...a].sort((u,v)=>u-v),med=s[s.length>>1];
+    const dv=a.map(v=>Math.abs(v-med)).sort((u,v)=>u-v),mad=dv[dv.length>>1];
+    return Float64Array.from(a,v=>Math.min(6,(v-med)/(1.4826*mad+1e-6)))};
+  const rx=z(px,H-6),ry=z(py,W-6);
+  const at=(r,pos)=>{const c=Math.round(pos);let m=-9;for(let k=-1;k<=1;k++){const j=c+k;if(j>=0&&j<r.length&&r[j]>m)m=r[j]}return m};
+  const comb=(r,p)=>{let best=-1e9,bph=0;for(let ph=0;ph<p;ph+=1){let s=0,n=0;for(let pos=ph;pos<r.length;pos+=p){s+=at(r,pos);n++}if(n>=2&&s/n>best){best=s/n;bph=ph}}return [best,bph]};
+  const maxP=Math.min(W,H)/1.5,sc=[],ps=[];
+  for(let p=50;p<=maxP;p+=0.5){const a=comb(rx,p),b=comb(ry,p);sc.push((a[0]+b[0])/2);ps.push(p)}
+  if(!sc.length)return 0;
+  const best=Math.max(...sc);
+  let i0=-1;
+  for(let i=1;i<sc.length-1;i++){if(sc[i]>=best*.85&&sc[i]>=sc[i-1]&&sc[i]>=sc[i+1]){i0=i;break}}
+  if(i0<0)i0=sc.indexOf(best);
+  const p0=ps[i0];
+  const fit=(r,p)=>{const ph=comb(r,p)[1],idx=[],pos=[];let k=0;
+    for(let q=ph;q<r.length;q+=p,k++){let bj=-1,bv=-1;const c=Math.round(q);
+      for(let j=c-4;j<=c+4;j++)if(j>=0&&j<r.length&&r[j]>bv){bv=r[j];bj=j}
+      if(bv>=2){idx.push(k);pos.push(bj)}}
+    if(idx.length<3)return null;
+    const n=idx.length,mi=idx.reduce((a,b)=>a+b)/n,mp=pos.reduce((a,b)=>a+b)/n;
+    let sxy=0,sxx=0;for(let j=0;j<n;j++){sxy+=(idx[j]-mi)*(pos[j]-mp);sxx+=(idx[j]-mi)**2}
+    if(!sxx)return null;const sl=sxy/sxx;return {p:sl,x0:mp-sl*mi}};
+  const fx=fit(rx,p0),fy=fit(ry,p0);
+  gridInfo={x0:fx?fx.x0:null,y0:fy?fy.x0:null};
+  const ok=[fx,fy].filter(f=>f&&Math.abs(f.p-p0)<p0*.08);
+  if(!ok.length)return p0;
+  return ok.reduce((a,f)=>a+f.p,0)/ok.length;
+}
+function detectPoints3(id,vib){
+  const W=id.width,H=id.height,d=id.data;
+  const dd=(i,j)=>Math.abs(d[i]-d[j])+Math.abs(d[i+1]-d[j+1])+Math.abs(d[i+2]-d[j+2]);
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]],xs=[],ys=[],TH=vib?70:110;
+  for(let y=5;y<H-5;y++)for(let x=5;x<W-5;x++){
+    const i=(y*W+x)*4,r=d[i],g=d[i+1],b=d[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+    if(target){if(Math.abs(r-target[0])+Math.abs(g-target[1])+Math.abs(b-target[2])>90)continue}
+    else if(vib){if(mx<204||(mx-mn)<.75*mx)continue;const dl=mx-mn;let h;if(mx===r)h=((g-b)/dl+6)%6;else if(mx===g)h=(b-r)/dl+2;else h=(r-g)/dl+4;h*=60;if(h>=14&&h<=48)continue}
+    else if(mx<170||(mx-mn)<.55*mx)continue;
+    for(const [dx,dy] of dirs){
+      if(dd(i,((y+4*dy)*W+x+4*dx)*4)>TH&&dd(i,((y-4*dy)*W+x-4*dx)*4)>TH){xs.push(x);ys.push(y);break}
+    }
+  }
+  const n=xs.length;if(n<30)return null;
+  const NT=720,diag=Math.ceil(Math.hypot(W,H)),NR=2*diag+1;
+  const acc=new Int32Array(NT*NR),cs=new Float32Array(NT),sn=new Float32Array(NT);
+  for(let t=0;t<NT;t++){const a=t*Math.PI/NT;cs[t]=Math.cos(a);sn[t]=Math.sin(a)}
+  const st=Math.ceil(n/120000);
+  for(let k=0;k<n;k+=st){const x=xs[k],y=ys[k];for(let t=0;t<NT;t++)acc[t*NR+Math.round(x*cs[t]+y*sn[t])+diag]++}
+  let best=0,bt=0,br=0;
+  for(let t=0;t<NT;t++)for(let r=1;r<NR-1;r++){const v=acc[t*NR+r-1]+acc[t*NR+r]+acc[t*NR+r+1];if(v>best){best=v;bt=t;br=r-diag}}
+  const nx=cs[bt],ny=sn[bt],ux=-ny,uy=nx,ts=[];
+  for(let k=0;k<n;k++){if(Math.abs(xs[k]*nx+ys[k]*ny-br)<=2.5)ts.push(xs[k]*ux+ys[k]*uy)}
+  if(ts.length<20)return null;
+  ts.sort((a,b)=>a-b);
+  const chains=[];let cur=[ts[0]];
+  for(let k=1;k<ts.length;k++){if(ts[k]-ts[k-1]>60){chains.push(cur);cur=[]}cur.push(ts[k])}
+  chains.push(cur);
+  const ch=chains.sort((a,b)=>b.length-a.length)[0];
+  const t0=ch[0],t1=ch[ch.length-1];if(t1-t0<60)return null;
+  const rad=(t)=>{
+    const px=br*nx+t*ux,py=br*ny+t*uy;let m=0;
+    for(let k=0;k<n;k++){if(Math.abs(xs[k]-px)<14&&Math.abs(ys[k]-py)<14){const p=Math.abs(xs[k]*nx+ys[k]*ny-br);if(p>m)m=p}}
+    return Math.max(3,Math.min(14,m))};
+  const at2=t=>[br*nx+t*ux,br*ny+t*uy];
+  const r2=[at2(t0+rad(t0)),at2(t1-rad(t1))];r2.votes=best;return r2;
+}
+const oc=document.createElement('canvas'),octx=oc.getContext('2d',{willReadFrequently:true});
+let pickDown=false;
+function pxAt(e){const p=pos(e),x=Math.max(0,Math.min(cv.width-1,Math.round(p[0]))),y=Math.max(0,Math.min(cv.height-1,Math.round(p[1])));return [x,y,octx.getImageData(x,y,1,1).data]}
+function preview(e){
+  const [x,y,c]=pxAt(e),lc=$('lp').getContext('2d'),pv=$('pv');
+  lc.imageSmoothingEnabled=false;lc.clearRect(0,0,104,104);lc.drawImage(oc,x-6,y-6,13,13,0,0,104,104);
+  lc.strokeStyle='#000';lc.lineWidth=1;lc.strokeRect(38.5,38.5,27,27);lc.strokeStyle='#fff';lc.strokeRect(40.5,40.5,23,23);
+  $('sw').style.background='rgb('+c[0]+','+c[1]+','+c[2]+')';
+  $('hx').textContent='#'+[c[0],c[1],c[2]].map(v=>v.toString(16).padStart(2,'0')).join('');
+  pv.hidden=false;
+  let L=e.clientX+22,T=e.clientY+22;
+  if(L+130>innerWidth)L=e.clientX-150;if(T+150>innerHeight)T=e.clientY-170;
+  pv.style.left=Math.max(4,L)+'px';pv.style.top=Math.max(4,T)+'px';
+}
+function pickSelect(e){
+  const c=pxAt(e)[2];target=[c[0],c[1],c[2]];picking=false;pickDown=false;
+  $('pv').hidden=true;$('pick').textContent='เลือกสีมาร์กจากภาพ';auto();
+}
+cv.addEventListener('pointerleave',()=>{if(!pickDown)$('pv').hidden=true});
+function auto(){
+  const id=raw();
+  let pts=null;{const a=$('vib').checked?null:detectPoints3(id,false),b=detectPoints3(id,true);pts=(a&&(!b||a.votes>=b.votes*1.2))?a:b}
+  if(pts){A=pts[0];B=pts[1]}
+  grid=detectGrid2(id);
+  $('gpx').value=grid?grid.toFixed(1):'';
+  draw();
+}
+function dist(){
+  const m=+$('gm').value||100,g=+$('gpx').value;
+  if(!A||!B||!g)return null;
+  const px=Math.hypot(A[0]-B[0],A[1]-B[1]);
+  return {m:px/g*m,cells:px/g,px};
+}
+function draw(){
+  if(!img)return;
+  ctx.drawImage(img,0,0);
+  const g=+$('gpx').value,m=+$('gm').value||100,s=cv.width/1000;
+  if(A&&B){
+    ctx.strokeStyle='#ff00e6';ctx.lineWidth=2.5*Math.max(s,1);ctx.setLineDash([10,6]);
+    ctx.beginPath();ctx.moveTo(...A);ctx.lineTo(...B);ctx.stroke();ctx.setLineDash([]);
+  }
+  [[A,'A'],[B,'B']].forEach(([p,t])=>{if(!p)return;
+    ctx.fillStyle='#ff00e6';ctx.strokeStyle='#fff';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(p[0],p[1],11*Math.max(s,1),0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold '+16*Math.max(s,1)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(t,p[0],p[1]+1)});
+  if(g){
+    if(gridInfo&&g>=10&&$('showg').checked){ctx.save();ctx.strokeStyle='rgba(0,255,255,.9)';ctx.lineWidth=1.5*Math.max(s,1);ctx.beginPath();
+      if(gridInfo.x0!=null){let x=gridInfo.x0%g;if(x<0)x+=g;for(;x<cv.width;x+=g){ctx.moveTo(x,0);ctx.lineTo(x,cv.height)}}
+      if(gridInfo.y0!=null){let y=gridInfo.y0%g;if(y<0)y+=g;for(;y<cv.height;y+=g){ctx.moveTo(0,y);ctx.lineTo(cv.width,y)}}
+      ctx.stroke();ctx.restore()}
+    const x=20,y=cv.height-24,h=8*Math.max(s,1);
+    ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=2;
+    ctx.fillRect(x,y,g,h);ctx.strokeRect(x,y,g,h);
+    ctx.font='bold '+15*Math.max(s,1)+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.lineWidth=4;ctx.strokeText(m+' m',x,y-4);ctx.fillText(m+' m',x,y-4);
+  }
+  const r=dist();
+  $('res').textContent=r?Math.round(r.m)+' m':'– m';
+  $('det').textContent=r?`ระยะ ${r.cells.toFixed(2)} ช่องกริด · ${r.px.toFixed(0)} พิกเซล · กริด ${g} พิกเซล/ช่อง`:'คลิกบนภาพเพื่อวางจุด A และ B';
+}
+function pos(e){const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]}
+cv.addEventListener('pointerdown',e=>{
+  const p=pos(e);
+  if(picking){pickDown=true;cv.setPointerCapture(e.pointerId);preview(e);return}
+  if(!A)A=p;else if(!B)B=p;else{
+    const da=Math.hypot(p[0]-A[0],p[1]-A[1]),db=Math.hypot(p[0]-B[0],p[1]-B[1]);
+    drag=da<=db?'A':'B';if(drag==='A')A=p;else B=p}
+  if(!drag)drag=B&&A&&!drag?'B':null;
+  cv.setPointerCapture(e.pointerId);
+  if(!drag)drag='B';
+  draw();
+});
+cv.addEventListener('pointermove',e=>{if(picking){preview(e);return}if(!drag)return;const p=pos(e);if(drag==='A')A=p;else B=p;draw()});
+cv.addEventListener('pointerup',e=>{if(picking&&pickDown){pickSelect(e);return}drag=null});
+['gpx','gm'].forEach(i=>$(i).oninput=draw);
+$('gm1').onclick=()=>{$('gpx').value=(+$('gpx').value-1);draw()};
+$('gp1').onclick=()=>{$('gpx').value=(+$('gpx').value+1);draw()};
+$('redo').onclick=()=>{target=null;auto()};
+$('showg').onchange=draw;
+$('vib').onchange=()=>auto();
+$('clr').onclick=()=>{A=B=null;draw()};
+$('pick').onclick=()=>{picking=!picking;$('pick').textContent=picking?'คลิกที่เส้น/จุดมาร์กในภาพ…':'เลือกสีมาร์กจากภาพ'};
+</script>
+</body>
+</html>
